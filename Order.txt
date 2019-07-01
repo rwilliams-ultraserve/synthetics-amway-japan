@@ -1,0 +1,132 @@
+var assert = require('assert');
+
+/* -- Disclaimer --
+- direct all queries towards aireland@ultraserve.com.au
+- you'll notice a lot of nested .then() statements, these are a necessary evil
+- you'll notice xpath locators are used in some functions and although these are
+prone to breaking when code changes are made that impact the nesting or positioning
+of elements, are also a necessary evil
+- this script is written by Alexander Ireland, all enquiries should go to
+ - aireland@ultraserve.com.au
+ - or failing the above, I'm also reachable at 0466852441
+*/
+
+var orderNumber = '0024';
+
+$browser.get('https://www.amwaylive.com/').then(function(){
+  //configuring browser specifications to match our use case
+  $browser.addHeader('User-Agent', 'Mozilla/5.0 (compatible; MSIE 10.6; Windows NT 6.1; Trident/5.0; InfoPath.2; SLCC1; .NET CLR 3.0.4506.2152; .NET CLR 3.5.30729; .NET CLR 2.0.50727) 3gpp-gba UNTRUSTED/1.0').then(
+    $browser.manage().deleteAllCookies().then(
+      $browser.manage().window().maximize().then(
+        $browser.manage().window().setSize(1920,3000)
+  )));
+  login();
+  orderLookup(orderNumber);
+  addToCart();
+  checkout();
+  //cancelOrder();
+});
+
+function waitForOverlay() {
+  return $browser.waitForAndFindElement($driver.By.css('div#overlay-loader'))
+    .then(
+      (element) => {return $browser.sleep(10000)
+        .then(() => { console.log('Waiting for Loading Overlay to Disappear'); })
+          .then($browser.wait(() => element.getCssValue('display') === 'none', 10000))})
+  .catch((error) => {});
+}
+
+function scrollToElement(targetElement){
+  targetElement.getLocation().then(function() {
+    $browser.manage().window().setPosition(0, 300);
+  });
+}
+
+function clickElementByText (linkText){
+  return $browser.findElement($driver.By.partialLinkText(linkText)).click();
+}
+
+function waitForUrl(url) {
+  console.log('Waiting for URL: ' + url);
+  return $browser.wait(() => {
+    return $browser.getCurrentUrl()
+      .then((location) => location && location.toLowerCase().startsWith(url.toLowerCase()));
+  });
+}
+
+function login (){
+  waitForUrl('https://www.amwaylive.com/').then(
+    waitForOverlay().then(
+      $browser.findElement($driver.By.css('.nav-links-container .js-my-account-menu')).click().then(
+        $browser.waitForAndFindElement($driver.By.className('btn-primary button login-form__submit')).then(
+          $browser.findElement($driver.By.className('btn-primary button login-form__submit')).click()
+  )))); 
+  waitForUrl('https://idp.amwaylive.com/auth/oauth2/default/v1/authorize').then(
+    $browser.findElement($driver.By.id('j_username')).sendKeys($secure.AMWAYLIVE_USERNAME).then(
+      $browser.findElement($driver.By.id('j_password')).sendKeys($secure.AMWAYLIVE_PASSWORD).then(
+        $browser.findElement($driver.By.className('btn primary loginformsumit')).click()
+  )));//by using Synthetics Secure Credentials we can avoid exposing login creds when accessing programmatically
+}
+
+function orderLookup (orderNumber){
+  waitForOverlay().then(
+    $browser.findElement($driver.By.id('js-site-search-input')).sendKeys(orderNumber).then(
+      $browser.findElement($driver.By.id('js-site-search-input')).submit().then(
+        $browser.findElement($driver.By.xpath('//*[@id="products"]/div/div[2]/div/div/div[2]/div[1]/div/div/div[1]/div[1]/a/img')).click()
+  )));
+}
+
+function addToCart (){
+  waitForUrl('https://www.amwaylive.com/%E8%A3%BD%E5%93%81%E3%82%AB%E3%83%86%E3%82%B4%E3%83%AA%E3%81%8B%E3%82%89%E6%8E%A2%E3%81%99/%E3%82%AD%E3%83%83%E3%83%81%E3%83%B3%E3%83%BB%E6%B5%84%E6%B0%B4%E5%99%A8%E3%83%BB%E7%A9%BA%E6%B0%97%E6%B8%85%E6%B5%84%E6%A9%9F%E3%83%BB%E6%B4%97%E5%89%A4%E3%81%AA%E3%81%A9/%E3%82%AA%E3%82%A4%E3%83%AB%E3%83%BB%E3%83%89%E3%83%AC%E3%83%83%E3%82%B7%E3%83%B3%E3%82%B0/%E3%82%A8%E3%82%B5%E3%83%B3%E3%83%86-%EF%BC%94-to-%EF%BC%91-%E8%84%82%E8%82%AA%E9%85%B8%E3%83%90%E3%83%A9%E3%83%B3%E3%82%B9%E3%82%AA%E3%82%A4%E3%83%AB/p/0024').then(
+    waitForOverlay().then(
+      $browser.findElement($driver.By.id('addToCartButton')).click().then(
+        $browser.sleep(5000).then(
+          waitForOverlay().then(
+            $browser.findElement($driver.By.xpath('//*[@id="modal-popup-container"]/div/div/div[3]/a[1]')).click()
+  )))));
+}
+
+function checkout (){
+  waitForOverlay().then(
+    $browser.sleep(6000).then(
+      $browser.findElement($driver.By.xpath('//*[@id="cartContent"]/div[5]/div[2]/div[2]/div/div/div/div[2]/div[2]/div[2]/a')).click()
+  ));
+  //this should progress the browser to the page at https://www.amwaylive.com/checkout/multi/delivery-address/add
+  waitForUrl('https://www.amwaylive.com/checkout/multi/delivery-address/add').then(
+    waitForOverlay().then(
+      $browser.findElement($driver.By.xpath('//*[@id="test123"]')).click()
+    )
+  );
+  //this should progress the browser to the page at https://www.amwaylive.com/checkout/multi/payment-method/add
+  waitForUrl('https://www.amwaylive.com/checkout/multi/payment-method/add').then(
+    waitForOverlay().then(
+      $browser.findElement($driver.By.xpath('//*[@id="v-for-paymentMode"]/li[2]/div/label/input')).click()
+    ));
+    waitForOverlay().then(
+      $browser.findElement($driver.By.xpath('//*[@id="checkout-payment-page"]/div[1]/div[3]/div/div/div/div[2]/div[2]/div[1]/div/button')).click()
+    );
+  //this should progress the browser to the page at https://www.amwaylive.com/checkout/multi/summary/view
+  waitForUrl('https://www.amwaylive.com/checkout/multi/summary/view').then(
+    waitForOverlay().then(      
+      $browser.findElement($driver.By.id('summarypage-submitplaceOrder-right')).click()
+  ));
+  waitForOverlay().then(
+    //console.log($browser.findElement($driver.By.xpath('//*[@id="shippingdiv"]/p/font/font')).getText())
+    //ご注文の問い合わせ番号 will be in the order success element, followed by the number example format is as follows:"ご注文の問い合わせ番号：: 89063857879"
+  );
+}
+
+function cancelOrder (){
+  $browser.get('https://www.amwaylive.com/my-account/orders').then(
+    waitForOverlay().then(
+      $browser.findElement($driver.By.xpath('//*[@id="215498974"]')).click().then(
+        waitForOverlay().then(
+          $browser.findElement($driver.By.te)
+    //console.log($browser.findElement($driver.By.xpath('//*[@id="shippingdiv"]/p/font/font')).getText())
+  ))));
+
+  //todo logic to acquire order number
+  //store in var
+  //nav to order purchase history
+  //click cancel
+}
