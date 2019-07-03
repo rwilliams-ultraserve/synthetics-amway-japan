@@ -13,6 +13,7 @@ $browser.addHeader('User-Agent', 'Mozilla/5.0 (compatible; MSIE 10.6; Windows NT
   .then($browser.manage().deleteAllCookies())
   .then($browser.manage().window().maximize())
   .then($browser.manage().window().setSize(1920, 3000))
+
   .then($browser.get('https://www.amwaylive.com/'))
 
   .then(() => {
@@ -20,7 +21,12 @@ $browser.addHeader('User-Agent', 'Mozilla/5.0 (compatible; MSIE 10.6; Windows NT
     return waitForUrl('https://www.amwaylive.com/')
       .then(waitForOverlay())
       .then($browser.findElement($driver.By.css('.nav-links-container .js-my-account-menu')).click())
-      .then($browser.waitForAndFindElement($driver.By.css('button.login-form__submit'), timeout).then((element) => { return element.click(); }))
+      .then(() => {
+        return $browser.waitForAndFindElement($driver.By.css('button.login-form__submit'), timeout)
+          .then(button => {
+            return button.click();
+          });
+      })
       .then(waitForUrl('https://idp.amwaylive.com/auth/oauth2/default/v1/authorize'))
       .then($browser.findElement($driver.By.id('j_username')).sendKeys($secure.AMWAYLIVE_USERNAME))
       .then($browser.findElement($driver.By.id('j_password')).sendKeys($secure.AMWAYLIVE_PASSWORD))
@@ -85,8 +91,22 @@ $browser.addHeader('User-Agent', 'Mozilla/5.0 (compatible; MSIE 10.6; Windows NT
         return productListItem.findElement($driver.By.css('form.add_to_cart_form button.add-to-cart')).click();
       })
       .then(waitForOverlay())
-      .then($browser.waitForAndFindElement($driver.By.css('div#modal-popup-container'), timeout))
-      .then(waitForOverlay());
+      .then(() => {
+        return $browser.waitForAndFindElement($driver.By.css('div#modal-popup-container'), timeout)
+          .then(dialog => {
+            return waitForOverlay()
+              .then(() => {
+                return dialog.findElement($driver.By.css('div.qty-selector span.red'))
+                  .then(span => {
+                    return span.getText()
+                      .then(text => {
+                        if (text.trim() != '1')
+                          throw new Error('Item was not added to cart');
+                      });
+                  });
+              });
+          });
+      });
   }, (err) => {
     console.log('Add to Cart Failed');
     throw err;
@@ -112,7 +132,6 @@ $browser.addHeader('User-Agent', 'Mozilla/5.0 (compatible; MSIE 10.6; Windows NT
       .then(waitForUrl('https://www.amwaylive.com/checkout/multi/payment-method/add'))
       .then(waitForOverlay())
       .then($browser.findElement($driver.By.css('input[data-paymentmode=cod]')).click())
-      // .then($browser.findElement($driver.By.css('input[data-paymentmode=cod]')).findElement($driver.By.xpath('//*/ancestor::label')).click())
       .then(waitForOverlay())
       .then($browser.findElement($driver.By.css('button.js-confirm-Order-Details')).click())
 
@@ -122,20 +141,52 @@ $browser.addHeader('User-Agent', 'Mozilla/5.0 (compatible; MSIE 10.6; Windows NT
 
       .then(waitForUrl('https://www.amwaylive.com/checkout/orderConfirmation/'))
       .then(waitForOverlay())
-      .then($browser.findElement($driver.By.css('div#shippingdiv > p')).getText())
-      .then(text => { 
-        let orderNumber = text.replace(/[^\d]/g, '');
-        console.log('Order Number: ' + orderNumber);
-        return orderNumber;
-      })
+      .then(() => {
+        return $browser.findElement($driver.By.css('div#shippingdiv > p')).getText()
+          .then(text => { 
+            let orderNumber = text.replace(/[^\d]/g, '');
+            console.log('Order Number: ' + orderNumber);
+            return orderNumber;
+          })
+      });
   }, (err) => {
     console.log('Checkout Failed');
     throw err;
   })
 
   .then(orderNumber => {
-    console.log('Order Number 2: ' + orderNumber);
+    console.log('View Orders')
+    if (orderNumber == null)
+      throw new Error('orderNumber is null');
+
+    return $browser.get('https://www.amwaylive.com/my-account/orders')
+      .then(waitForOverlay())
+      .then($browser.findElement($driver.By.xpath('//tr[contains(concat(" ", normalize-space(@class), " "), " order-history-table-item ")]/td/span/span[contains(concat(" ", normalize-space(text()), " "), " ' + orderNumber + ' ")]')).click())
+      .then(waitForOverlay());
+  }, (err) => {
+    console.log('View Orders Failed');
+    throw err;
   })
+
+  .then(() => {
+    console.log('Cancel Order');
+
+    return $browser.findElement($driver.By.css('tr.order-details-block div.orderCancelBtn')).click()
+      .then($browser.waitForAndFindElement($driver.By.css('div#cancel_order_popup'), timeout)
+        .then(dialog => {
+          return dialog.findElement($driver.By.css('.orderCancelBtn3')).click();
+        })
+      );
+  }, (err) => {
+    console.log('Cancel Order Failed');
+    throw err;
+  })
+
+  .catch(err => {
+    console.log('ERROR: ' + err.message);
+    console.log(err.stack);
+    throw err;
+  });
 
 function waitForOverlay() {
   return $browser.waitForAndFindElement($driver.By.css('div#overlay-loader'))
