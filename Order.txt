@@ -17,7 +17,7 @@ $browser.addHeader('User-Agent', 'Mozilla/5.0 (compatible; MSIE 10.6; Windows NT
   .then($browser.get('https://www.amwaylive.com/'))
 
   .then(() => {
-    console.log('Login');
+    log('Login');
     return waitForUrl('https://www.amwaylive.com/')
       .then(waitForOverlay())
       .then($browser.findElement($driver.By.css('.nav-links-container .js-my-account-menu')).click())
@@ -34,12 +34,12 @@ $browser.addHeader('User-Agent', 'Mozilla/5.0 (compatible; MSIE 10.6; Windows NT
       .then(waitForUrl('https://www.amwaylive.com/'))
       .then(waitForOverlay())
   }, (err) => {
-    console.log('Login Failed');
+    log('Login Failed');
     throw err;
   })
 
   .then(() => {
-    console.log('Search for Product');
+    log('Search for Product');
     return $browser.findElement($driver.By.id('js-site-search-input'))
       .then((searchBox) => {
         return searchBox.sendKeys(productId)
@@ -48,12 +48,12 @@ $browser.addHeader('User-Agent', 'Mozilla/5.0 (compatible; MSIE 10.6; Windows NT
       .then(waitForUrl('https://www.amwaylive.com/search/'))
       .then(waitForOverlay())
   }, (err) => {
-    console.log('Search for Product Failed');
+    log('Search for Product Failed');
     throw err;
   })
 
   .then(() => {
-    console.log('Search Results');
+    log('Search Results');
     // Find the correct product in the search results, matching on productId (発注番号)
     return $browser.findElements($driver.By.css('p.product-list__item-number'))
       .then(items => {
@@ -74,12 +74,12 @@ $browser.addHeader('User-Agent', 'Mozilla/5.0 (compatible; MSIE 10.6; Windows NT
         })
       });  
   }, (err) => {
-    console.log('Search Results Failed')
+    log('Search Results Failed')
     throw err;
   })
 
   .then(item => {
-    console.log('Add to Cart');
+    log('Add to Cart');
     return item.findElement($driver.By.xpath('//ancestor::div[contains(concat(" ", normalize-space(@class), " "), " product-list__item ")]'))
       .then(productListItem => {
         productListItem.findElement($driver.By.css('.product-stock .product-availability .not-available')).then(() => {
@@ -108,22 +108,30 @@ $browser.addHeader('User-Agent', 'Mozilla/5.0 (compatible; MSIE 10.6; Windows NT
           });
       });
   }, (err) => {
-    console.log('Add to Cart Failed');
+    log('Add to Cart Failed');
     throw err;
   })
   
   .then(() => {
-    console.log('View Cart');
+    log('View Cart');
     return $browser.findElement($driver.By.css('div#modal-popup-container a.btn.pop-add-to-cart')).click()
       .then(waitForUrl('https://www.amwaylive.com/cart'))
       .then(waitForOverlay)
+      .then(() => {
+        return $browser.findElement($driver.By.css('div.cart-top-totals > span:first-of-type')).then(span => {
+          return span.getText().then(text => {
+            if (text.trim == '0')
+              throw new Error('Cart is empty');
+          });
+        });
+      });
   }, (err) => {
-    console.log('View Cart Failed');
+    log('View Cart Failed');
     throw err;
   })
 
   .then(() => {
-    console.log('Checkout');
+    log('Checkout');
     return $browser.findElement($driver.By.css('a.continueCheckout')).click()
       .then(waitForUrl('https://www.amwaylive.com/checkout/multi/delivery-address/add'))
       .then(waitForOverlay())
@@ -145,60 +153,92 @@ $browser.addHeader('User-Agent', 'Mozilla/5.0 (compatible; MSIE 10.6; Windows NT
         return $browser.findElement($driver.By.css('div#shippingdiv > p')).getText()
           .then(text => { 
             let orderNumber = text.replace(/[^\d]/g, '');
-            console.log('Order Number: ' + orderNumber);
+            log('Order Number: ' + orderNumber);
+
             return orderNumber;
           })
       });
   }, (err) => {
-    console.log('Checkout Failed');
+    log('Checkout Failed');
     throw err;
   })
 
   .then(orderNumber => {
-    console.log('View Orders')
+    log('View Orders')
     if (orderNumber == null)
       throw new Error('orderNumber is null');
 
-    return $browser.get('https://www.amwaylive.com/my-account/orders')
+    const url = 'https://www.amwaylive.com/my-account/orders'
+    trace('Loading: ' + url);
+    return $browser.get(url)
       .then(waitForOverlay())
-      .then($browser.findElement($driver.By.xpath('//tr[contains(concat(" ", normalize-space(@class), " "), " order-history-table-item ")]/td/span/span[contains(concat(" ", normalize-space(text()), " "), " ' + orderNumber + ' ")]')).click())
+      .then(() => {
+        return $browser.findElement($driver.By.xpath('//tr[contains(concat(" ", normalize-space(@class), " "), " order-history-table-item ")]/td/span/span[contains(concat(" ", normalize-space(text()), " "), " ' + orderNumber + ' ")]'))
+          .then(span => {
+            return span.getText().then(text => {
+              log('Expanding Order: ' + text);
+              return span.click();
+            })
+          });
+      })
       .then(waitForOverlay());
   }, (err) => {
-    console.log('View Orders Failed');
+    log('View Orders Failed');
     throw err;
   })
 
   .then(() => {
-    console.log('Cancel Order');
-
-    return $browser.findElement($driver.By.css('tr.order-details-block div.orderCancelBtn')).click()
-      .then($browser.waitForAndFindElement($driver.By.css('div#cancel_order_popup'), timeout)
+    log('Cancel Order');
+    trace('Locating Cancel Order Button in expanded order');
+    return $browser.waitForAndFindElement($driver.By.css('tr.order-details-block div.orderCancelBtn'), timeout)
+      .then(button => {
+        return button.click();
+      })
+      .then(()=> {
+        log('Waiting for Element: div#cancel_order_popup');
+        $browser.waitForAndFindElement($driver.By.css('div#cancel_order_popup'), timeout)
         .then(dialog => {
-          return dialog.findElement($driver.By.css('.orderCancelBtn3')).click();
+          return dialog.findElement($driver.By.css('a.orderCancelBtn3')).then(element => {
+            trace('Clicking a.orderCancelBtn3');
+            element.click();
+          });
         })
-      );
+        .then(waitForOverlay())
+      })
+      .then($browser.waitForAndFindElement($driver.By.css('div#cancel_order_popup p.history-cancel-success-title'), timeout))
+      .then(dialog => {
+        log('Success');
+      });
   }, (err) => {
-    console.log('Cancel Order Failed');
+    log('Cancel Order Failed');
     throw err;
   })
 
   .catch(err => {
-    console.log('ERROR: ' + err.message);
-    console.log(err.stack);
+    log('ERROR: ' + err.message);
+    log(err.stack);
     throw err;
   });
+
+function log(message) {
+  console.log(new Date() + ' ' + message);
+}
+
+function trace(message) {
+  console.log(new Date() + ' ' + message);
+}
 
 function waitForOverlay() {
   return $browser.waitForAndFindElement($driver.By.css('div#overlay-loader'))
     .then((element) => {
-      console.log('Waiting for Loading Overlay to Disappear');
+      log('Waiting for Loading Overlay to Disappear');
       return $browser.wait(() => element.getCssValue('display') === 'none', timeout)
     })
     .catch((error) => {});
 }
 
 function waitForUrl(url) {
-  console.log('Waiting for URL: ' + url);
+  log('Waiting for URL: ' + url);
   return $browser.wait(() => {
     return $browser.getCurrentUrl()
       .then((location) => location && location.toLowerCase().startsWith(url.toLowerCase()));
