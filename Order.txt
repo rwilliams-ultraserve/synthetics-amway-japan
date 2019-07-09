@@ -6,6 +6,7 @@ var assert = require('assert');
  * This script places an order on amwaylive.com using Cash on Delivery and then cancels that order.
  */
 
+const delayOrderCancellation = 60 * 1000; // Maximum script runtime is 180 seconds 
 const productId = '0024';
 const timeout = 10000;
 
@@ -120,7 +121,7 @@ $browser.addHeader('User-Agent', 'Mozilla/5.0 (compatible; MSIE 10.6; Windows NT
       .then(() => {
         return $browser.findElement($driver.By.css('div.cart-top-totals > span:first-of-type')).then(span => {
           return span.getText().then(text => {
-            if (text.trim == '0')
+            if (text.trim() == '0')
               throw new Error('Cart is empty');
           });
         });
@@ -155,8 +156,11 @@ $browser.addHeader('User-Agent', 'Mozilla/5.0 (compatible; MSIE 10.6; Windows NT
             let orderNumber = text.replace(/[^\d]/g, '');
             log('Order Number: ' + orderNumber);
 
-            return orderNumber;
-          })
+            log('Sleeping for: ' + delayOrderCancellation + 'ms');
+            return $browser.sleep(delayOrderCancellation).then(() => {
+              return orderNumber;
+            });
+          });
       });
   }, (err) => {
     log('Checkout Failed');
@@ -169,7 +173,7 @@ $browser.addHeader('User-Agent', 'Mozilla/5.0 (compatible; MSIE 10.6; Windows NT
       throw new Error('orderNumber is null');
 
     const url = 'https://www.amwaylive.com/my-account/orders'
-    trace('Loading: ' + url);
+    log('Loading: ' + url);
     return $browser.get(url)
       .then(waitForOverlay())
       .then(() => {
@@ -189,18 +193,19 @@ $browser.addHeader('User-Agent', 'Mozilla/5.0 (compatible; MSIE 10.6; Windows NT
 
   .then(() => {
     log('Cancel Order');
-    trace('Locating Cancel Order Button in expanded order');
+    log('Locating Cancel Order Button in expanded order');
     return $browser.waitForAndFindElement($driver.By.css('tr.order-details-block div.orderCancelBtn'), timeout)
       .then(button => {
+        log('Clicking tr.order-details-block div.orderCancelBtn');
         return button.click();
       })
       .then(()=> {
         log('Waiting for Element: div#cancel_order_popup');
         $browser.waitForAndFindElement($driver.By.css('div#cancel_order_popup'), timeout)
         .then(dialog => {
-          return dialog.findElement($driver.By.css('a.orderCancelBtn3')).then(element => {
-            trace('Clicking a.orderCancelBtn3');
-            element.click();
+          return dialog.findElement($driver.By.css('a.orderCancelBtn3')).then(a => {
+            log('Clicking div#cancel_order_popup a.orderCancelBtn3');
+            a.click();
           });
         })
         .then(waitForOverlay())
@@ -221,11 +226,7 @@ $browser.addHeader('User-Agent', 'Mozilla/5.0 (compatible; MSIE 10.6; Windows NT
   });
 
 function log(message) {
-  console.log(new Date() + ' ' + message);
-}
-
-function trace(message) {
-  console.log(new Date() + ' ' + message);
+  console.log(new Date() + ' INFO ' + message);
 }
 
 function waitForOverlay() {
